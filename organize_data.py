@@ -89,7 +89,7 @@ def __(pd):
     # Code to organize SCE AMI data for k-means
 
     # Read in data
-    sce_ami_data = pd.read_csv("~/Downloads/SLAC/sce_ami.csv.gz")
+    sce_ami_data = pd.read_csv("../sce_ami/sce_ami.csv.gz")
 
     # Organizing Timestamp data for both UTC and local timezones
     sce_ami_data['timestamp_utc'] = pd.DatetimeIndex(sce_ami_data['record_date']) + pd.to_timedelta(sce_ami_data['hour_id'].values - 1 \
@@ -108,7 +108,7 @@ def __(pd):
     sce_ami["timezone_utc"] = 0
 
     #Save Data
-    #sce_ami.to_csv('~/Downloads/SLAC/saved_data/sce_ami_edited.csv', index=True)
+    #sce_ami.to_csv("../sce_ami/sce_ami_edited.csv", index=True)
     return sce_ami, sce_ami_data, sce_ami_drp, sce_ami_idx
 
 
@@ -186,7 +186,7 @@ def __(mo):
 
 @app.cell
 def __(datetime, os, pd):
-    folder = "/Users/angelcd/Downloads/SLAC/Database_Data/NHEC_Files"
+    folder = "../NHEC_Files"
     data_list = []
 
     # Organizing AMI Data in a DataFrame with meter ids and timestamps as indexes; power is in kW
@@ -313,7 +313,7 @@ def __(pd):
     ami_test['timestamp_local'] = pd.to_datetime(ami_test['timestamp_local'])
 
     # Dataframe with k-mean values
-    kmeans_file = pd.read_csv('~/Downloads/SLAC/kmeans_nhec_newtz/kmeans_local_20/loadshapes.csv')
+    kmeans_file = pd.read_csv("../Loadshape_files/nhec_2_group_loadshapes.csv")
 
     # Requires user input: which graph from k-means has the most buildings in its group? input the loadshape #
     res_index = 9
