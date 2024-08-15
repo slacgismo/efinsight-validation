@@ -31,4 +31,10 @@ The first section of the file explains the functions of the files and gives thei
         - groups.csv: tells user the group each ID was assigned to
         - loadshapes.csv: tells the user the means for each seasonal, daytype, hour combination (192 combos) for each group
         - output.png: graphs all the means in loadshapes.csv for each group
- - For this project, the residential group was assumed to be the group with the biggest sample number (N) and closest to the expected power values of a residential loadshape (1-2 kW). 
+ - For this project, the residential group was assumed to be the group with the biggest sample number (N) and closest to the expected power values of a residential loadshape (1-2 kW).
+
+# Future Work
+- Take a look at ORNL simulation output data: https://zenodo.org/records/10419620
+   - Has the following data fields: Electricity_Facility[kBTU], NaturalGas_Facility[kBTU], Heating_Electricity[kBTU], Cooling_Electricity[kBTU], Heating_NaturalGas[kBTU], Heating_Total[kBTU], WaterSystems_Electricity[kBTU], Lighting_Electricity[kBTU], Equipment_Electricity[kBTU], Fans_Electricity[kBTU], Pumps_Electricity[kBTU], HeatRejection_Electricity[kBTU], HeatRecovery_Electricity[kBTU], Surface_Outside_Face_Heat_Emission[GJ], Zone_Exfiltration_Heat_Loss[GJ], Zone_Exhaust_Air_Heat_Loss[GJ], Heat_Rejection_Energy[GJ], Anthropogenic_Emissions[GJ]
+   - ORNL also provided this sample, with archetypes: https://zenodo.org/records/7714167#.ZC3Cy3bML-g
+- Look at valid
