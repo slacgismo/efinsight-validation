@@ -10,12 +10,9 @@ def __():
     import marimo as mo
     import os
     import matplotlib.pyplot as plt
-    import pytz
     import numpy as np
-    from dateutil import tz
     from datetime import datetime, timedelta
-    from sg2t.utils.timeseries import Timeseries
-    return Timeseries, datetime, mo, np, os, pd, plt, pytz, timedelta, tz
+    return datetime, mo, np, os, pd, plt, timedelta
 
 
 @app.cell
@@ -23,18 +20,19 @@ def __(mo):
     mo.md(
         r"""
         # Files Needed
-        - sce_ami.csv.gz (SCE AMI data)
-        - NHEC AMI files (the code reads the csv files in a specific folder)
+        - sce_ami.csv.gz (SCE AMI data) for *sce_ami_data*
+        - NHEC AMI files (the code reads the csv files in a specific folder) for *folder*
             - ElectricMeterReadings_INTERVALCIS_EXPORT_01-01-21-0000_07-31-21-0000.csv
             - ElectricMeterReadings_INTERVALCIS_EXPORT_01-01-22-0000_08-18-22-0000.csv
             - ElectricMeterReadings_INTERVALCIS_EXPORT_08-01-20-0000_12-31-20-0000.csv
             - ElectricMeterReadings_INTERVALCIS_EXPORT_08-01-21-0000_12-31-21-0000.csv
-        - Organized AMI Data: sce_ami_edited.csv (too big for Github, needs to be created) and nhec_ami_edited.csv
-        - Loadshape.csv from Loadshape pipeline for *kmeans_file*
+        - Organized AMI Data: sce_ami_edited.csv (too big for Github, needs to be created) and nhec_ami_edited.csv; these files need to be imported into the Loadshape pipeline
+        - Loadshape.csv from the Loadshape pipeline for *kmeans_file*
         - resstock_metadata.csv and comstock_metadata.csv to find the number of buildings as part of the data normalization for *resstock_bldgs* and *comstock_bldgs*
         - Resstock and Comstock kW/sf data for all building types (each building type has a separate variable) under GISMo Forecast Data to run the graphs
         - CA-Orange.csv.zip for Orange County housing square footage data for *orange_cty*
         - Loadshape files for *nhec_ami_kmeans_2* and *sce_ami_kmeans_2s*
+        - Any reference to k-means is refering to the output from the Loadshape pipeline, since this pipeline uses k-means clustering to sort load shapes
         """
     )
     return
@@ -43,14 +41,6 @@ def __(mo):
 @app.cell
 def __(mo):
     mo.md(r"""# SCE AMI Data""")
-    return
-
-
-@app.cell
-def __():
-    # need to run kmeans on adjusted data
-    # run statistics on commerical data with sce ami
-    # find averga with commercial, do it individually, and then start grouping
     return
 
 
@@ -109,23 +99,8 @@ def __(pd):
     sce_ami["timezone_utc"] = 0
 
     #Save Data
-    #sce_ami.to_csv("../sce_ami/sce_ami_edited.csv", index=True) # Need to run this block first, the edited SCE AMI data is too large for GitHub
+    #sce_ami.to_csv("../sce_ami/sce_ami_edited.csv", index=True) # Need to run this block first, the edited SCE AMI datafile is too large for GitHub
     return sce_ami, sce_ami_data, sce_ami_drp, sce_ami_idx
-
-
-@app.cell
-def __():
-    #row1 = sce_ami_data.loc[sce_ami_data['customer_id'] == '1252657E'].set_index(['record_date', 'hour_id', 'utc_offset']).sort_index()['energy_value'].reset_index()
-    #row1.index = pd.DatetimeIndex(row1['record_date']) + pd.to_timedelta(row1['hour_id'].values - 1 + row1['utc_offset'], unit = 'h')
-    #row1.loc[row1['utc_offset'].diff() != 0].reset_index() # no duplicates or gaps, utc should be sequential
-    return
-
-
-@app.cell
-def __():
-    #row2 = row1.loc['2015-03-09']
-    #row2
-    return
 
 
 @app.cell
@@ -271,7 +246,7 @@ def __(nhec_ami, plt):
 def __(mo):
     mo.md(
         r"""
-        # Finding the best k-means group count
+        # Finding the best Loadshape pipeline group count
         - Both the AMI data and Loadshape files are loaded in manually, then two functions are used to assign season and daytype to the data. Hour is also assigned, creating 3 new columns within the dataframe
         - Then, four dictionaries are created, one for each season, where each key has each daytype and hour combination, creating 48 keys
         - The standard deviation of the AMI data with the means from Loadshape are found. The means of the residential data and the overall data are also found. The following plots show the mean standard deviations for the SCE and NHEC AMI data when compared to their Loadshape files.
@@ -284,7 +259,6 @@ def __(mo):
 @app.cell
 def __(pd):
     # Dataframe with AMI data
-
     ami_test = pd.read_csv('../Loadshape_files/nhec_ami_edited.csv', low_memory=False)
     ami_test['timestamp'] = pd.to_datetime(ami_test['timestamp'])
 
@@ -334,7 +308,7 @@ def __(ami_test):
             wint_combo = (ami_test['hour_test'] == _hour_w) & (ami_test['season'] == 'winter') & (ami_test['day_type'] == _day_w)
             first_letter_w = _day_w[0]
             fifth_letter_w = _day_w[4]
-            wint_name = f"win_{first_letter_w}{fifth_letter_w}_{_hour_w}h" # matching name to k-means format
+            wint_name = f"win_{first_letter_w}{fifth_letter_w}_{_hour_w}h" # matching name to Loadshape pipeline format
             wint_copy = ami_test[wint_combo].copy()
 
             # Drop all columns but the power column
@@ -368,7 +342,7 @@ def __(ami_test):
             spr_combo = (ami_test['hour_test'] == _hour_s) & (ami_test['season'] == 'spring') & (ami_test['day_type'] == _day_s)
             first_letter_sp = _day_s[0]
             fifth_letter_sp = _day_s[4]
-            spr_name = f"spr_{first_letter_sp}{fifth_letter_sp}_{_hour_s}h" # matching name to k-means format
+            spr_name = f"spr_{first_letter_sp}{fifth_letter_sp}_{_hour_s}h" # matching name to Loadshape pipeline format
             spr_copy = ami_test[spr_combo].copy()
 
             # Drop all columns but the power column
@@ -403,7 +377,7 @@ def __(ami_test):
             sum_combo = (ami_test['hour_test'] == _hour_su) & (ami_test['season'] == 'summer') & (ami_test['day_type'] == _day_su)
             first_letter_su = _day_su[0]
             fifth_letter_su = _day_su[4]
-            sum_name = f"sum_{first_letter_su}{fifth_letter_su}_{_hour_su}h" # matching name to k-means format
+            sum_name = f"sum_{first_letter_su}{fifth_letter_su}_{_hour_su}h" # matching name to Loadshape pipeline format
             sum_copy = ami_test[sum_combo].copy()
             
             # Drop all columns but the power column
@@ -437,7 +411,7 @@ def __(ami_test):
             fall_combo = (ami_test['hour_test'] == _hour_f) & (ami_test['season'] == 'fall') & (ami_test['day_type'] == _day_f)
             first_letter_f = _day_f[0]
             fifth_letter_f = _day_f[4]
-            fall_name = f"fal_{first_letter_f}{fifth_letter_f}_{_hour_f}h" # matching name to k-means format
+            fall_name = f"fal_{first_letter_f}{fifth_letter_f}_{_hour_f}h" # matching name to Loadshape pipeline format
             fall_copy = ami_test[fall_combo].copy()
 
             # Drop all columns but the power column
@@ -481,25 +455,25 @@ def __(key, kmeans_file, np, pd, res_index, wint_dict):
         # The overall seasonal mean of the standard deviations is found in (win/spr/sum/fal)_sd_mean
 
 
-    # Matching the standard dev dataframe length to the length of the k-means dataframe
+    # Matching the standard dev dataframe length to the length of the Loadshape dataframe
     dev_winter_data = pd.DataFrame(index=kmeans_file.index) 
 
     # Loop that matches the k-means value with the matching column in the ami winter dictionary, then stores it into a dataframe
     for _key_w, _ami_winter in wint_dict.items():
-        if _key_w in kmeans_file.columns: # if the name of the dataframe is present in the k-means file
-            # ami_value_w = _ami_winter['energy_value'] # all winter values from ami data that match the k-means column name
-            ami_value_w = _ami_winter['power'] # all winter values from ami data that match the k-means column name
+        if _key_w in kmeans_file.columns: # if the name of the dataframe is present in the Loadshape file
+            # ami_value_w = _ami_winter['energy_value'] # all winter values from ami data that match the Loadshape column name
+            ami_value_w = _ami_winter['power'] # all winter values from ami data that match the Loadshape column name
             dev_list_w = []
-            for _value_w in kmeans_file[_key_w]: # grabbing column of means from k-means
-                kmeans_value_w = _value_w  # grabbing column of means from k-means
+            for _value_w in kmeans_file[_key_w]: # grabbing column of means from Loadshape
+                kmeans_value_w = _value_w  # grabbing column of means from Loadshape
                 std_dev_winter = np.sqrt(np.mean((ami_value_w - kmeans_value_w)**2)) # standard deviation formula
                 dev_list_w.append(std_dev_winter)
-            dev_winter_data[_key_w] = dev_list_w # has all of the stan devs for each k-means group for every season, daytype, hour combo
+            dev_winter_data[_key_w] = dev_list_w # has all of the stan devs for each Loadshape group for every season, daytype, hour combo
         else:
             print(f"'{key}' not found in k-means DataFrame.")
 
     # Finding the mean of the standard deviation for the group with residential data (has the most buildings)
-    wint_row_means = dev_winter_data.mean(axis=1) # all of the mean standard deviations for each k-means group
+    wint_row_means = dev_winter_data.mean(axis=1) # all of the mean standard deviations for each Loadshape group
     wint_res_sd_mean = wint_row_means[res_index] # residential mean standard deviation
 
     # Finding the mean of the stan dev for all data
@@ -531,25 +505,25 @@ def __(ami_value_w, np, sce_ami):
 @app.cell
 def __(key, kmeans_file, np, pd, res_index, spr_dict):
     # Spring Standard Deviations
-    # Matching the standard dev dataframe length to the length of the k-means dataframe
+    # Matching the standard dev dataframe length to the length of the Loadshape dataframe
     dev_spring_data = pd.DataFrame(index=kmeans_file.index) 
 
     # Loop that matches the k-means value with the matching column in the ami winter dictionary, then stores it into a dataframe
     for _key_sp, _ami_spr in spr_dict.items():
-        if _key_sp in kmeans_file.columns: # if the name of the dataframe is present in the k-means file
-            # ami_value_sp = _ami_spr['energy_value'] # all spring values from ami data that match the k-means column name
-            ami_value_sp = _ami_spr['power'] # all spring values from ami data that match the k-means column name
+        if _key_sp in kmeans_file.columns: # if the name of the dataframe is present in the Loadshape file
+            # ami_value_sp = _ami_spr['energy_value'] # all spring values from ami data that match the Loadshape column name
+            ami_value_sp = _ami_spr['power'] # all spring values from ami data that match the Loadshape column name
             dev_list_sp = []
-            for _value_sp in kmeans_file[_key_sp]:  # grabbing column of means from k-means
-                kmeans_value_sp = _value_sp  # grabbing column of means from k-means
+            for _value_sp in kmeans_file[_key_sp]:  # grabbing column of means from Loadshape
+                kmeans_value_sp = _value_sp  # grabbing column of means from Loadshape
                 std_dev_spr = np.sqrt(np.mean((ami_value_sp - kmeans_value_sp)**2)) # standard deviation formula
                 dev_list_sp.append(std_dev_spr)
-            dev_spring_data[_key_sp] = dev_list_sp # has all of the stan devs for each k-means group for every season, daytype, hour combo
+            dev_spring_data[_key_sp] = dev_list_sp # has all of the stan devs for each Loadshape group for every season, daytype, hour combo
         else:
             print(f"'{key}' not found in k-means DataFrame.")
 
     # Finding the mean of the standard deviation for the group with residential data (has the most buildings)
-    spr_row_means = dev_spring_data.mean(axis=1) # all of the mean standard deviations for each k-means group
+    spr_row_means = dev_spring_data.mean(axis=1) # all of the mean standard deviations for each Loadshape group
     spr_res_sd_mean = spr_row_means[res_index] # residential mean standard deviation
 
     # Finding the mean of the stan dev for all data
@@ -569,25 +543,25 @@ def __(key, kmeans_file, np, pd, res_index, spr_dict):
 @app.cell
 def __(key, kmeans_file, np, pd, res_index, sum_dict):
     # Summer Standard Deviations
-    # Matching the standard dev dataframe length to the length of the k-means dataframe
+    # Matching the standard dev dataframe length to the length of the Loadshape dataframe
     dev_summer_data = pd.DataFrame(index=kmeans_file.index) 
 
     # Loop that matches the k-means value with the matching column in the ami winter dictionary, then stores it into a dataframe
     for _key_su, _ami_sum in sum_dict.items():
-        if _key_su in kmeans_file.columns: # if the name of the dataframe is present in the k-means file
-            # ami_value_su = _ami_sum['energy_value'] # all summer values from ami data that match the k-means column name
-            ami_value_su = _ami_sum['power'] # all summer values from ami data that match the k-means column name
+        if _key_su in kmeans_file.columns: # if the name of the dataframe is present in the Loadshape file
+            # ami_value_su = _ami_sum['energy_value'] # all summer values from ami data that match the Loadshape column name
+            ami_value_su = _ami_sum['power'] # all summer values from ami data that match the Loadshape column name
             dev_list_su = []
-            for _value_su in kmeans_file[_key_su]:  # grabbing column of means from k-means
-                kmeans_value_su = _value_su  # grabbing column of means from k-means
+            for _value_su in kmeans_file[_key_su]:  # grabbing column of means from Loadshape
+                kmeans_value_su = _value_su  # grabbing column of means from Loadshape
                 std_dev_sum = np.sqrt(np.mean((ami_value_su - kmeans_value_su)**2)) # standard deviation formula
                 dev_list_su.append(std_dev_sum)
-            dev_summer_data[_key_su] = dev_list_su # has all of the stan devs for each k-means group for every season, daytype, hour combo
+            dev_summer_data[_key_su] = dev_list_su # has all of the stan devs for each Loadshape group for every season, daytype, hour combo
         else:
             print(f"'{key}' not found in k-means DataFrame.")
 
     # Finding the mean of the standard deviation for the group with residential data (has the most buildings)
-    sum_row_means = dev_summer_data.mean(axis=1) # all of the mean standard deviations for each k-means group
+    sum_row_means = dev_summer_data.mean(axis=1) # all of the mean standard deviations for each Loadshape group
     sum_res_sd_mean = sum_row_means[res_index] # residential mean standard deviation
 
     # Finding the mean of the stan dev for all data
@@ -607,25 +581,25 @@ def __(key, kmeans_file, np, pd, res_index, sum_dict):
 @app.cell
 def __(fall_dict, key, kmeans_file, np, pd, res_index):
     # Fall Standard Deviations
-    # Matching the standard dev dataframe length to the length of the k-means dataframe
+    # Matching the standard dev dataframe length to the length of the Loadshape dataframe
     dev_fall_data = pd.DataFrame(index=kmeans_file.index) 
 
     # Loop that matches the k-means value with the matching column in the ami winter dictionary, then stores it into a dataframe
     for _key_f, _ami_fall in fall_dict.items():
-        if _key_f in kmeans_file.columns: # if the name of the dataframe is present in the k-means file
-            # ami_value_f = _ami_fall['energy_value'] # all fall values from ami data that match the k-means column name
-            ami_value_f = _ami_fall['power'] # all fall values from ami data that match the k-means column name
+        if _key_f in kmeans_file.columns: # if the name of the dataframe is present in the Loadshape file
+            # ami_value_f = _ami_fall['energy_value'] # all fall values from ami data that match the Loadshape column name
+            ami_value_f = _ami_fall['power'] # all fall values from ami data that match the Loadshape column name
             dev_list_f = []
-            for _value_f in kmeans_file[_key_f]:  # grabbing column of means from k-means
-                kmeans_value_f = _value_f  # grabbing column of means from k-means
+            for _value_f in kmeans_file[_key_f]:  # grabbing column of means from Loadshape
+                kmeans_value_f = _value_f  # grabbing column of means from Loadshape
                 std_dev_fall = np.sqrt(np.mean((ami_value_f - kmeans_value_f)**2)) # standard deviation formula
                 dev_list_f.append(std_dev_fall)
-            dev_fall_data[_key_f] = dev_list_f # has all of the stan devs for each k-means group for every season, daytype, hour combo
+            dev_fall_data[_key_f] = dev_list_f # has all of the stan devs for each Loadshape group for every season, daytype, hour combo
         else:
             print(f"'{key}' not found in k-means DataFrame.")
 
     # Finding the mean of the standard deviation for the group with residential data (has the most buildings)
-    fall_row_means = dev_fall_data.mean(axis=1) # all of the mean standard deviations for each k-means group
+    fall_row_means = dev_fall_data.mean(axis=1) # all of the mean standard deviations for each Loadshape group
     fall_res_sd_mean = fall_row_means[res_index] # residential mean standard deviation
 
     # Finding the mean of the stan dev for all data
@@ -656,7 +630,7 @@ def __(
     wint_res_sd_mean,
     wint_sd_mean,
 ):
-    print(f'This data represents the means of the standard deviations when k-means created {len(kmeans_file.index)} groups.')
+    print(f'This data represents the means of the standard deviations when the Loadshape pipeline created {len(kmeans_file.index)} groups.')
     print(f'The residential data reflects the data from group #{res_index}')
     print ('')
 
@@ -870,13 +844,6 @@ def __(np, pd):
         sing_att_data,
         sing_det_data,
     )
-
-
-@app.cell
-def __(sing_att_data):
-    print(max(sing_att_data))
-    print(min(sing_att_data))
-    return
 
 
 @app.cell
@@ -1223,7 +1190,7 @@ def __(np):
 @app.cell
 def __(gismo_mobile, mobile_data, pd, plt):
     # 2 GROUPS, SCE AMI
-    # Plotting SCE AMI data after k-means
+    # Plotting SCE AMI data after it has been sorted by the Loadshape pipeline
     sce_ami_kmeans_2s = pd.read_csv('../Loadshape_files/sce_2_group_loadshapes.csv')
 
     # What group is the residential data in?
@@ -1381,7 +1348,7 @@ def __(ami_avg_day_2s, avg_comstock_norm, find_rmse, np):
 @app.cell
 def __(gismo_med_office, med_office, pd, plt):
     # 2 GROUPS
-    # Plotting NHEC AMI data after k-means
+    # Plotting NHEC AMI data after it has been sorted by the Loadshape pipeline
     nhec_ami_kmeans_2 = pd.read_csv('../Loadshape_files/nhec_2_group_loadshapes.csv')
 
     # What group is the residential data in?
