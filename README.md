@@ -17,7 +17,7 @@ The first section of the file explains the functions of the files and gives thei
     - For local time, daylight savings is recorded with a 1, and 0 refers to standard time.
 - Installing the Loadshape pipeline on a Mac:
     - Activate your environment and changed the directory to the folder that has your config.csv and data file.
-        - If you do not have a config.csv file, Loadshape will create one in the selected folder during installation
+        - If you do not have a config.csv file, Loadshape will create one in the selected folder during your first run
         - An example config.csv file is also available in `Loadshape_files`
     - Activate Arras Energy through Docker and use the command "docker run -itv $PWD:/app lfenergy/arras:develop bash"
         - This step can be optional in some cases
