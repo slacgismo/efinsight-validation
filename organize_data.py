@@ -29,6 +29,7 @@ def __(mo):
             - ElectricMeterReadings_INTERVALCIS_EXPORT_01-01-22-0000_08-18-22-0000.csv
             - ElectricMeterReadings_INTERVALCIS_EXPORT_08-01-20-0000_12-31-20-0000.csv
             - ElectricMeterReadings_INTERVALCIS_EXPORT_08-01-21-0000_12-31-21-0000.csv
+        - Organized AMI Data: sce_ami_edited.csv (too big for Github, needs to be created) and nhec_ami_edited.csv
         - Loadshape.csv from Loadshape pipeline for *kmeans_file*
         - resstock_metadata.csv and comstock_metadata.csv to find the number of buildings as part of the data normalization for *resstock_bldgs* and *comstock_bldgs*
         - Resstock and Comstock kW/sf data for all building types (each building type has a separate variable) under GISMo Forecast Data to run the graphs
@@ -108,7 +109,7 @@ def __(pd):
     sce_ami["timezone_utc"] = 0
 
     #Save Data
-    #sce_ami.to_csv("../sce_ami/sce_ami_edited.csv", index=True)
+    #sce_ami.to_csv("../sce_ami/sce_ami_edited.csv", index=True) # Need to run this block first, the edited SCE AMI data is too large for GitHub
     return sce_ami, sce_ami_data, sce_ami_drp, sce_ami_idx
 
 
@@ -163,20 +164,6 @@ def __(mo):
 def __(mo):
     mo.md(
         r"""
-        - Questions
-            - Can we assume that the timestamp given is local?
-            - Had to manually edit timezone to match GISMo data (if timestamp is in UTC, the peak would be before midday)
-            - NHEC AMI data before the manual shift also mimics the behavior of some Comstock buildings
-            - Other note: SCE AMI data matched GISMo Comstock data better, but still has a big sigma number
-        """
-    )
-    return
-
-
-@app.cell
-def __(mo):
-    mo.md(
-        r"""
         - NHEC AMI data comes from New Hampshire from the PostRoad-Energy Github Repo (https://github.com/postroad-energy/simulation/tree/develop-add-ami/nhec/ami)
         - Only local time was included in the organized dataset
         """
@@ -220,10 +207,6 @@ def __(datetime, os, pd):
         utc = add_utc(_times)
         utc_offset.append(utc)
 
-    nhec_ami['utc_offset'] = pd.to_timedelta(pd.to_numeric(utc_offset), unit='h')
-    nhec_ami['timestamp_local'] = timestamps - nhec_ami['utc_offset']
-    # Disclaimer: 'timestamp' may be the local time already
-
     dst_results = []
 
     def add_dst(time):
@@ -234,18 +217,13 @@ def __(datetime, os, pd):
         else:
             return '0'
 
-    for _dates in nhec_ami['timestamp_local']:
+    for _dates in timestamps:
         is_dst = add_dst(_dates)
         dst_results.append(is_dst)
 
     nhec_ami['is_dst'] = dst_results
 
-    def _day_type(day):
-        return ['weekday' if x < 5 else 'weekend' for x in day]
-
-    nhec_ami['day_type'] = _day_type(timestamps.dayofweek)
-
-    #nhec_ami.to_csv('~/Downloads/SLAC/saved_data/nhec_ami_edited_take2.csv', index=True)
+    #nhec_ami.to_csv('../Loadshape_files/nhec_ami_edited.csv', index=True)
     return (
         add_dst,
         add_utc,
@@ -306,17 +284,15 @@ def __(mo):
 @app.cell
 def __(pd):
     # Dataframe with AMI data
-    # ami_test = pd.read_csv('~/Downloads/SLAC/saved_data/sce_ami_edited.csv', low_memory=False)
-    # ami_test['timestamp_local'] = pd.to_datetime(ami_test['timestamp_local'])
 
-    ami_test = pd.read_csv('~/Downloads/SLAC/saved_data/nhec_ami_edited_take2.csv', low_memory=False)
-    ami_test['timestamp_local'] = pd.to_datetime(ami_test['timestamp_local'])
+    ami_test = pd.read_csv('../Loadshape_files/nhec_ami_edited.csv', low_memory=False)
+    ami_test['timestamp'] = pd.to_datetime(ami_test['timestamp'])
 
     # Dataframe with k-mean values
     kmeans_file = pd.read_csv("../Loadshape_files/nhec_2_group_loadshapes.csv")
 
-    # Requires user input: which graph from k-means has the most buildings in its group? input the loadshape #
-    res_index = 9
+    # REQUIRES USER INPUT: which graph from k-means has the most buildings in its group? Input the loadshape group #
+    res_index = 0
 
     # Functions to sort the seasons, weekday/ends, and hours of the data's timestamps into different columns
     def season(month):
@@ -332,13 +308,14 @@ def __(pd):
     def day_type(day):
         return 'weekday' if day < 5 else 'weekend'
 
+    # For SCE AMI
     # ami_test['season'] = ami_test['timestamp_local'].dt.month.apply(season)
     # ami_test['day_type'] = ami_test['timestamp_local'].dt.dayofweek.apply(day_type)
     # ami_test['hour_test'] = ami_test['timestamp_local'].dt.hour
 
-    ami_test['season'] = ami_test['timestamp_local'].dt.month.apply(season)
-    ami_test['day_type'] = ami_test['timestamp_local'].dt.dayofweek.apply(day_type)
-    ami_test['hour_test'] = ami_test['timestamp_local'].dt.hour
+    ami_test['season'] = ami_test['timestamp'].dt.month.apply(season)
+    ami_test['day_type'] = ami_test['timestamp'].dt.dayofweek.apply(day_type)
+    ami_test['hour_test'] = ami_test['timestamp'].dt.hour
     return ami_test, day_type, kmeans_file, res_index, season
 
 
@@ -359,12 +336,16 @@ def __(ami_test):
             fifth_letter_w = _day_w[4]
             wint_name = f"win_{first_letter_w}{fifth_letter_w}_{_hour_w}h" # matching name to k-means format
             wint_copy = ami_test[wint_combo].copy()
+
+            # Drop all columns but the power column
+            wint_dict[wint_name] = wint_copy.drop(['meter_id', 'timestamp', 'is_dst', \
+                                                   'season','day_type','hour_test'], \
+                                                  axis=1)
+
+            # For SCE AMI
             # wint_dict[wint_name] = wint_copy.drop(['timestamp_utc', 'timezone_utc', 'is_dst', \
             #                                     'circuit_name','customer_id','timestamp_local','season','day_type','hour_test'], \
             #                                       axis=1)
-            wint_dict[wint_name] = wint_copy.drop(['meter_id', 'timestamp', 'is_dst', 'utc_offset', 'timestamp_local', \
-                                                   'season','day_type','hour_test'], \
-                                                  axis=1)
 
     # Call the data by using wint_dict['win_wd_23h']
         # All names are formatted as: wint_(we/wd)_(0-23)h
@@ -389,12 +370,17 @@ def __(ami_test):
             fifth_letter_sp = _day_s[4]
             spr_name = f"spr_{first_letter_sp}{fifth_letter_sp}_{_hour_s}h" # matching name to k-means format
             spr_copy = ami_test[spr_combo].copy()
+
+            # Drop all columns but the power column
+            spr_dict[spr_name] = spr_copy.drop(['meter_id', 'timestamp', 'is_dst', \
+                                                   'season','day_type','hour_test'], \
+                                                  axis=1)
+
+            # For SCE AMI
             # spr_dict[spr_name] = spr_copy.drop(['timestamp_utc', 'timezone_utc', 'is_dst', \
             #                                   'circuit_name','customer_id', 'timestamp_local', 'season','day_type','hour_test'], \
             #                                  axis=1)
-            spr_dict[spr_name] = spr_copy.drop(['meter_id', 'timestamp', 'is_dst', 'utc_offset', 'timestamp_local', \
-                                                   'season','day_type','hour_test'], \
-                                                  axis=1)
+            
 
     # Call the data by using spr_dict['spr_wd_23h']
         # All names are formatted as: spr_(we/wd)_(0-23)h
@@ -419,13 +405,16 @@ def __(ami_test):
             fifth_letter_su = _day_su[4]
             sum_name = f"sum_{first_letter_su}{fifth_letter_su}_{_hour_su}h" # matching name to k-means format
             sum_copy = ami_test[sum_combo].copy()
-            #globals()[sum_name] = ami_test[sum_combo].copy()
+            
+            # Drop all columns but the power column
+            sum_dict[sum_name] = sum_copy.drop(['meter_id', 'timestamp', 'is_dst', \
+                                                   'season','day_type','hour_test'], \
+                                                  axis=1)
+
+            # For SCE AMI
             # sum_dict[sum_name] = sum_copy.drop(['timestamp_utc', 'timezone_utc', 'is_dst', \
             #                                   'circuit_name','customer_id','timestamp_local','season','day_type','hour_test'], \
             #                                  axis=1)
-            sum_dict[sum_name] = sum_copy.drop(['meter_id', 'timestamp', 'is_dst', 'utc_offset', 'timestamp_local', \
-                                                   'season','day_type','hour_test'], \
-                                                  axis=1)
 
     # Call the data by using sum_dict['sum_we_23h']
         # All names are formatted as: sum_(we/wd)_(0-23)h
@@ -450,12 +439,16 @@ def __(ami_test):
             fifth_letter_f = _day_f[4]
             fall_name = f"fal_{first_letter_f}{fifth_letter_f}_{_hour_f}h" # matching name to k-means format
             fall_copy = ami_test[fall_combo].copy()
+
+            # Drop all columns but the power column
+            fall_dict[fall_name] = fall_copy.drop(['meter_id', 'timestamp', 'is_dst', \
+                                                   'season','day_type','hour_test'], \
+                                                  axis=1)
+
+            # For SCE AMI
             # fall_dict[fall_name] = fall_copy.drop(['timestamp_utc', 'timezone_utc', 'is_dst', \
             #                                     'circuit_name','customer_id','timestamp_local','season','day_type','hour_test'], \
             #                                     axis=1)
-            fall_dict[fall_name] = fall_copy.drop(['meter_id', 'timestamp', 'is_dst', 'utc_offset', 'timestamp_local', \
-                                                   'season','day_type','hour_test'], \
-                                                  axis=1)
 
     #for fall_name, fall_copy in fall_dict.items():
         #print(f"DataFrame {fall_name} created.")
@@ -708,7 +701,7 @@ def __():
 
 @app.cell
 def __():
-    # Numbers for NHEC AMI Data - 1st take
+    # Numbers for NHEC AMI Data
     group_num_nhec = list(range(2, 21, 2))
     res_std_nhec = [18.548194190212875, 19.05028697037593, 19.10591284406399, 19.16981681712639, 19.253685501274717, \
                    19.09164097926809, 19.10486311283183, 19.264825181693748, 19.107306220338256, 19.291648956883797]
@@ -805,8 +798,8 @@ def __(mo):
 
 @app.cell
 def __(pd):
-    resstock_bldgs = pd.read_csv("~/Downloads/SLAC/resstock_metadata.csv")
-    orangecty_resstock = resstock_bldgs.loc[resstock_bldgs['county'] == 'G0600590']
+    resstock_bldgs = pd.read_csv("../metadata/resstock_metadata.csv")
+    orangecty_resstock = resstock_bldgs.loc[resstock_bldgs['county'] == 'G0600590'] # Code for Orange County
     orange_mobile = orangecty_resstock.loc[orangecty_resstock['building_type'] == 'Mobile Home']
     orange_multi24 = orangecty_resstock.loc[orangecty_resstock['building_type'] == 'Multi-Family with 2 - 4 Units']
     orange_multi5 = orangecty_resstock.loc[orangecty_resstock['building_type'] == 'Multi-Family with 5+ Units']
@@ -831,7 +824,7 @@ def __(pd):
 
 @app.cell
 def __(mo):
-    # Plotting Resstock GISMo Forecast Data
+    # Plotting Resstock GISMo Forecast Data w/ Marimo features
     plots = ['Average Day - Mobile Homes', 'Average Day - Multi-Family Homes w/ 2-4 Units', 'Average Day - Multi-Family Homes w/ 5+ Units', 'Average Day - Single-Family Attached Homes', 'Average Day - Single-Family Detached Homes', 'Sum of All Home Types', 'Avg of All Home Types']
     selected_plot = mo.ui.dropdown(plots,plots[0])
     selected_plot
@@ -840,14 +833,14 @@ def __(mo):
 
 @app.cell
 def __(np, pd):
-    # Normalized GISMo Forecast Data
-    gismo_mobile = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo Power_Sqft/orange_county_mobile_home_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_multi_24 = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo Power_Sqft/orange_county_multi-family_with_2_-_4_units_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_multi_5 = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo Power_Sqft/orange_county_multi-family_with_5plus_units_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_single_att = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo Power_Sqft/orange_county_single-family_attached_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_single_det = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo Power_Sqft/orange_county_single-family_detached_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    # Normalized GISMo Forecast Data (kW/sf)
+    gismo_mobile = pd.read_csv('../resstock_normalized_power/orange_county_mobile_home_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_multi_24 = pd.read_csv('../resstock_normalized_power/orange_county_multi-family_with_2_-_4_units_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_multi_5 = pd.read_csv('../resstock_normalized_power/orange_county_multi-family_with_5plus_units_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_single_att = pd.read_csv('../resstock_normalized_power/orange_county_single-family_attached_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_single_det = pd.read_csv('../resstock_normalized_power/orange_county_single-family_detached_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
 
-    # Finding average by dividing data by number of houses used in data
+    # Finding average by dividing data by number of houses used in the simulations, found from metadata
     mobile_data = (gismo_mobile['Total Electricity [kW/sf]']) / 120
     multi24_data = (gismo_multi_24['Total Electricity [kW/sf]']) / 387
     multi5_data = (gismo_multi_5['Total Electricity [kW/sf]']) / 1105
@@ -906,6 +899,7 @@ def __(
     sing_att_data,
     sing_det_data,
 ):
+    # Loop that prints the plots for each ResStock plot when the user uses the Marimo button feature above
     if selected_plot.value == plots[0]:
         res_plot = pd.Series(mobile_data,index=gismo_mobile['hour'])
         title = 'Average Day from the GISMo Forecast for a Mobile Home'
@@ -944,7 +938,7 @@ def __(
 
 @app.cell
 def __(pd):
-    comstock_bldgs = pd.read_csv("~/Downloads/SLAC/comstock_metadata.csv")
+    comstock_bldgs = pd.read_csv("../metadata/comstock_metadata.csv")
     orangecty_comstock = comstock_bldgs.loc[comstock_bldgs['county'] == 'G0600590']
     orange_warehouse = orangecty_comstock.loc[orangecty_comstock['building_type'] == 'Warehouse']
     orange_soffice = orangecty_comstock.loc[orangecty_comstock['building_type'] == 'SmallOffice']
@@ -998,20 +992,20 @@ def __(pd):
 @app.cell
 def __(np, pd):
     # Normalized GISMo Comstock Data
-    gismo_small_hotel = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_smallhotel_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_large_hotel = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_largehotel_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_small_office = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_smalloffice_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_med_office = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_mediumoffice_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_large_office = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_largeoffice_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_prim_school = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_primaryschool_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_second_school = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_secondaryschool_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_retail_alone = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_retailstandalone_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_retail_mall = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_retailstripmall_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_warehouse = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_warehouse_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_full_rest = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_fullservicerestaurant_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_quick_rest = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_quickservicerestaurant_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_hospital = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_hospital_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
-    gismo_outpatient = pd.read_csv('~/Downloads/SLAC/Database_Data/GISMo_ComSt_sqft/com_orange_county_outpatient_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_small_hotel = pd.read_csv('../comstock_normalized_power/com_orange_county_smallhotel_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_large_hotel = pd.read_csv('../comstock_normalized_power/com_orange_county_largehotel_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_small_office = pd.read_csv('../comstock_normalized_power/com_orange_county_smalloffice_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_med_office = pd.read_csv('../comstock_normalized_power/com_orange_county_mediumoffice_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_large_office = pd.read_csv('../comstock_normalized_power/com_orange_county_largeoffice_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_prim_school = pd.read_csv('../comstock_normalized_power/com_orange_county_primaryschool_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_second_school = pd.read_csv('../comstock_normalized_power/com_orange_county_secondaryschool_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_retail_alone = pd.read_csv('../comstock_normalized_power/com_orange_county_retailstandalone_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_retail_mall = pd.read_csv('../comstock_normalized_power/com_orange_county_retailstripmall_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_warehouse = pd.read_csv('../comstock_normalized_power/com_orange_county_warehouse_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_full_rest = pd.read_csv('../comstock_normalized_power/com_orange_county_fullservicerestaurant_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_quick_rest = pd.read_csv('../comstock_normalized_power/com_orange_county_quickservicerestaurant_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_hospital = pd.read_csv('../comstock_normalized_power/com_orange_county_hospital_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
+    gismo_outpatient = pd.read_csv('../comstock_normalized_power/com_orange_county_outpatient_total_energy_normalized.csv', usecols=['hour', 'Total Electricity [kW/sf]'])
 
 
     # Finding average by dividing data by number of houses used in data
@@ -1070,6 +1064,7 @@ def __(np, pd):
 
 @app.cell
 def __(mo):
+    # Marimo button feature for ComStock data
     plots_comstock = ['Average Day - Small Hotel', 'Average Day - Large Hotel', 'Average Day - Small Office', 'Average Day - Medium Office', 'Average Day - Large Office', 'Average Day - Primary School', 'Average Day - Secondary School', 'Average Day - Retail Stand Alone', 'Average Day - Retail Strip Mall', 'Average Day - Warehouse', 'Average Day - Full Service Restaurant', 'Average Day - Quick Service Restaurant', 'Average Day - Hospital', 'Average Day - Outpatient', 'Avg of All Home Types']
     selected_plot_comstock = mo.ui.dropdown(plots_comstock,plots_comstock[0])
     selected_plot_comstock
@@ -1113,6 +1108,7 @@ def __(
     small_office,
     warehouses,
 ):
+    # Loop for button functionality
     if selected_plot_comstock.value == plots_comstock[0]:
         res_plot_comstock = pd.Series(small_hotel,index=gismo_small_hotel['hour'])
         title_comstock = 'Average Day from the GISMo Forecast for a Small Hotel'
@@ -1174,13 +1170,6 @@ def __(
 
 
 @app.cell
-def __(res_plot_comstock):
-    print(min(res_plot_comstock.values))
-    print(max(res_plot_comstock.values))
-    return
-
-
-@app.cell
 def __(mo):
     mo.md(
         r"""
@@ -1198,7 +1187,7 @@ def __(mo):
 @app.cell
 def __(pd):
     # House Data for Orange County
-    orange_cty = pd.read_csv("~/Downloads/SLAC/CA-Orange.csv.zip")
+    orange_cty = pd.read_csv("../metadata/CA-Orange.csv.zip")
     orange_cty
     return orange_cty,
 
@@ -1225,6 +1214,7 @@ def __(mo):
 
 @app.cell
 def __(np):
+    # RMSE Function
     def find_rmse(actual, predicted):
         return np.sqrt(np.mean((actual - predicted) ** 2))
     return find_rmse,
@@ -1234,7 +1224,7 @@ def __(np):
 def __(gismo_mobile, mobile_data, pd, plt):
     # 2 GROUPS, SCE AMI
     # Plotting SCE AMI data after k-means
-    sce_ami_kmeans_2s = pd.read_csv('~/Downloads/SLAC/kmeans/kmeans_local_2/loadshapes.csv')
+    sce_ami_kmeans_2s = pd.read_csv('../Loadshape_files/sce_2_group_loadshapes.csv')
 
     # What group is the residential data in?
     res_group_2s = 0
@@ -1254,7 +1244,7 @@ def __(gismo_mobile, mobile_data, pd, plt):
     fig.set_figheight(10)
     fig.set_figwidth(20)
 
-    # NHEC AMI Graph
+    # SCE AMI Graph
     ami.plot(ami_avg_day_2s.index, ami_avg_day_2s.values, linestyle='-.', color='r', label='SCE AMI')
     ami.set_title('Average Day from SCE AMI [2 groups] and Resstock Data', fontsize=30)
     ami.set_xlabel('Hours', fontsize=25)
@@ -1297,13 +1287,13 @@ def __(gismo_mobile, mobile_data, pd, plt):
 
 @app.cell
 def __(ami_avg_day_2s, gismo_med_office, med_office, pd, plt):
-    #Plotting AMI Data over the Resstock graph
+    # Plotting AMI Data over the ComStock graph
     fig3, ami3 = plt.subplots()
     fig3.set_figheight(10)
     fig3.set_figwidth(20)
 
 
-    # NHEC AMI Graph
+    # SCE AMI Graph
     ami3.plot(ami_avg_day_2s.index, ami_avg_day_2s.values, linestyle='-.', color='r', label='SCE AMI')
     ami3.set_title('Average Day from SCE AMI [2 groups] and Comstock Data', fontsize=30)
     ami3.set_xlabel('Hours', fontsize=25)
@@ -1313,7 +1303,7 @@ def __(ami_avg_day_2s, gismo_med_office, med_office, pd, plt):
     ami3.set_xticklabels(range(min(ami_avg_day_2s.index), max(ami_avg_day_2s.index)+1, 2), fontsize=17)
     ami3.grid(True)
 
-    # Overlaying Resstock graph
+    # Overlaying ComStock graph
     comstock_graph2 = ami3.twinx()
     comstock_data = pd.Series(med_office,index=gismo_med_office['hour'])
     comstock_graph2.plot(comstock_data.index, comstock_data.values, color='blue', linestyle='-', linewidth=2, markersize=8, label='Comstock, Medium Office')
@@ -1356,6 +1346,7 @@ def __(mo):
 
 @app.cell
 def __(ami_avg_day_2s, avg_gismo_norm, find_rmse, np):
+    # Comparing SCE and ResStock
     rmse_g24 = find_rmse(ami_avg_day_2s.values, avg_gismo_norm)
 
     rsme_std_g24_ami = rmse_g24 / (np.std(ami_avg_day_2s.values))
@@ -1372,6 +1363,7 @@ def __(ami_avg_day_2s, avg_gismo_norm, find_rmse, np):
 
 @app.cell
 def __(ami_avg_day_2s, avg_comstock_norm, find_rmse, np):
+    # Comparing SCE and ComStock
     rmse_g24c = find_rmse(ami_avg_day_2s.values, avg_comstock_norm)
 
     rsme_std_g24_amic = rmse_g24c / (np.std(ami_avg_day_2s.values))
@@ -1390,7 +1382,7 @@ def __(ami_avg_day_2s, avg_comstock_norm, find_rmse, np):
 def __(gismo_med_office, med_office, pd, plt):
     # 2 GROUPS
     # Plotting NHEC AMI data after k-means
-    nhec_ami_kmeans_2 = pd.read_csv('~/Downloads/SLAC/kmeans_nhec/kmeans_local_2/loadshapes.csv')
+    nhec_ami_kmeans_2 = pd.read_csv('../Loadshape_files/nhec_2_group_loadshapes.csv')
 
     # What group is the residential data in?
     res_group_2 = 0
@@ -1449,13 +1441,6 @@ def __(gismo_med_office, med_office, pd, plt):
         res_group_2,
         res_plot_comstock_ex,
     )
-
-
-@app.cell
-def __(ami_avg_day_2):
-    min(ami_avg_day_2.values)
-    max(ami_avg_day_2.values)
-    return
 
 
 @app.cell
