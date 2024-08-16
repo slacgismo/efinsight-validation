@@ -491,18 +491,6 @@ def __(key, kmeans_file, np, pd, res_index, wint_dict):
 
 
 @app.cell
-def __(ami_value_w, np, sce_ami):
-    max_e = sce_ami.loc[sce_ami['energy_value'] == np.float64(1083.6)]
-    max_energy = sce_ami.loc[sce_ami['energy_value'] == max(sce_ami['energy_value'])]
-    min_energy = sce_ami.loc[sce_ami['energy_value'] == min(sce_ami['energy_value'])]
-
-    print(f" The maximum value in wint_dict is: {max(ami_value_w)}")
-    print(f" The minimum value in wint_dict is: {min(ami_value_w)}")
-    print(f" The mean value in wint_dict is: {np.mean(ami_value_w)}")
-    return max_e, max_energy, min_energy
-
-
-@app.cell
 def __(key, kmeans_file, np, pd, res_index, spr_dict):
     # Spring Standard Deviations
     # Matching the standard dev dataframe length to the length of the Loadshape dataframe
